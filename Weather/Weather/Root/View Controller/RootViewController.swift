@@ -83,36 +83,7 @@ class RootViewController: UITableViewController {
             locationManager.requestWhenInUseAuthorization()
         }
     }
-    
 
-    private func fetchWeatherData() {
-        guard let location = currentLocation else {
-            return
-        }
-        
-        // Helpers
-        let latitude = location.coordinate.latitude
-        let longitude = location.coordinate.longitude
-        
-//        // Fetch Weather Data for Location
-//        dataManager.weatherDataForLocation(latitude: latitude, longitude: longitude) { [weak self] (result) in
-//            switch result {
-//            case .success(let weatherData):
-//                // Configure Day View Controller
-//                self?.dayViewController.viewModel = DayViewModel(weatherData: weatherData)
-//
-//                // Configure Week View Controller
-//                self?.weekViewController.viewModel = WeekViewModel(weatherData: weatherData.dailyData)
-//            case .failure:
-//                // Notify User
-//                self?.presentAlert(of: .noWeatherDataAvailable)
-//
-//                // Update Child View Controllers
-//                self?.dayViewController.viewModel = nil
-//                self?.weekViewController.viewModel = nil
-//            }
-//        }
-    }
     
     // MARK: -
     
