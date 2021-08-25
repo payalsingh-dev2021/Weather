@@ -18,25 +18,26 @@ class WeatherDetailViewController: UITableViewController {
         }
     }
     
+    lazy var activityIndicatorView:UIActivityIndicatorView = {
+        let activityIndicatorView = UIActivityIndicatorView(style: UIActivityIndicatorView.Style.medium)
+        tableView.backgroundView = activityIndicatorView
+        return activityIndicatorView
+    }()
+    
     var locationWeatherDataViewModel: LocationWeatherDataViewModel? {
         didSet {
             updateView()
         }
     }
-    var activityIndicatorView:UIActivityIndicatorView!
 
     func updateView(){
         activityIndicatorView.stopAnimating()
-        self.title = locationWeatherDataViewModel?.locationTitle
+        self.title = locationWeatherDataViewModel?.locationTitle ?? ""
         self.tableView.reloadData()
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        let activityIndicatorView = UIActivityIndicatorView(style: UIActivityIndicatorView.Style.medium)
-        tableView.backgroundView = activityIndicatorView
-        self.activityIndicatorView = activityIndicatorView
-        
     }
     
     func fetchLocationsWeatherData(forID locationID:String){
@@ -104,4 +105,12 @@ extension WeatherDetailViewController{
     }
     
     
+}
+
+
+extension WeatherDetailViewController:LocationSelectedDelegate{
+    func locationSelected(_ locationID: String) {
+        self.locationWeatherDataViewModel = nil
+        self.locationID = locationID
+    }
 }

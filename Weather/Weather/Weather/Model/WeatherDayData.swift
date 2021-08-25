@@ -39,17 +39,17 @@ struct WeatherDayData: Decodable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        applicableDate = try! container.decode(String.self, forKey: .applicable_date)        
-        weather = try! container.decode(String.self, forKey: .weather_state_name)
-        weatherCode = try! container.decode(String.self, forKey: .weather_state_abbr)
-        windDirection = try! container.decode(String.self, forKey: .wind_direction_compass)
-        windSpeed = try! container.decode(Double.self, forKey: .wind_speed)
-        minTemp = try! container.decode(Double.self, forKey: .min_temp)
-        maxTemp = try! container.decode(Double.self, forKey: .max_temp)
-        currentTemp = try! container.decode(Double.self, forKey: .the_temp)
-        visibility = try! container.decode(Double.self, forKey: .visibility)
-        humidity = try! container.decode(Double.self, forKey: .humidity)
-        airPressure = try! container.decode(Double.self, forKey: .air_pressure)
+        applicableDate = (try? container.decode(String.self, forKey: .applicable_date)) ?? ""
+        weather = (try? container.decode(String.self, forKey: .weather_state_name)) ?? ""
+        weatherCode = (try? container.decode(String.self, forKey: .weather_state_abbr)) ?? ""
+        windDirection = (try? container.decode(String.self, forKey: .wind_direction_compass)) ?? ""
+        windSpeed = (try? container.decode(Double.self, forKey: .wind_speed)) ?? 0.0
+        minTemp = (try? container.decode(Double.self, forKey: .min_temp)) ?? 0.0
+        maxTemp = (try? container.decode(Double.self, forKey: .max_temp)) ?? 0.0
+        currentTemp = (try? container.decode(Double.self, forKey: .the_temp)) ?? 0.0
+        visibility = (try? container.decode(Double.self, forKey: .visibility)) ?? 0.0
+        humidity = (try? container.decode(Double.self, forKey: .humidity)) ?? 0.0
+        airPressure = (try? container.decode(Double.self, forKey: .air_pressure)) ?? 0.0
     }
     
     

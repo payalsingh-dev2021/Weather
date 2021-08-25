@@ -8,20 +8,25 @@
 import UIKit
 import CoreLocation
 import CoreData
+import Combine
 
 class RootViewController: UITableViewController {
     var managedObjectContext: NSManagedObjectContext? = (UIApplication.shared.delegate as? AppDelegate)?.persistentContainer.viewContext
 
-    @IBOutlet var searchBar:UISearchBar!
-    
+    weak var delegate:LocationSelectedDelegate?
+    private var subscriptions: Set<AnyCancellable> = []
+
     let dataManager = DataManager() //Manages Network Request to API
-    var locationViewModel: LocationViewModel? {
-        didSet {
-            updateView()
-        }
-    }
+    let locationViewModel = LocationViewModel(locationService: LocationService())
     
-    var activityIndicatorView:UIActivityIndicatorView!
+    @IBOutlet var searchBar:UISearchBar!
+
+    lazy var activityIndicatorView:UIActivityIndicatorView = {
+        let activityIndicatorView = UIActivityIndicatorView(style: UIActivityIndicatorView.Style.medium)
+        tableView.backgroundView = activityIndicatorView
+        return activityIndicatorView
+    }()
+    
     private enum AlertType {
         case notAuthorizedToRequestLocation
         case failedToRequestLocation
@@ -37,7 +42,7 @@ class RootViewController: UITableViewController {
                 return
             }
             let coordinate = "\(currentLocation.coordinate.latitude),\(currentLocation.coordinate.longitude)"
-            fetchLocationsByCoordinate(coordinate)
+            locationViewModel.coordinate = coordinate
         }
     }
         
@@ -52,23 +57,38 @@ class RootViewController: UITableViewController {
         return locationManager
     }()
     
-    
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view.
-        let activityIndicatorView = UIActivityIndicatorView(style: UIActivityIndicatorView.Style.medium)
-        tableView.backgroundView = activityIndicatorView
-        self.activityIndicatorView = activityIndicatorView
-        
-        tableView.reloadData()
+        self.searchBar.resignFirstResponder()
         self.requestLocation()
+        setupLocationViewModel()
     }
     
-    
-    func updateView(){
-        activityIndicatorView.stopAnimating()
-        self.tableView.reloadData()
+    func setupLocationViewModel(){
+        // Subscribe to Locations Publisher
+        locationViewModel.locationsPublisher
+            .sink(receiveValue: { [weak self] _ in
+                self?.tableView.setContentOffset(.zero, animated: true)
+                self?.tableView.reloadData()
+            }).store(in: &subscriptions)
+        
+        // Subscribe to Querying
+        locationViewModel.$querying
+            .sink(receiveValue: { [weak self] (isQuerying) in
+                if isQuerying {
+                    self?.activityIndicatorView.startAnimating()
+                } else {
+                    self?.activityIndicatorView.stopAnimating()
+                }
+            }).store(in: &subscriptions)
     }
+    
+//    func updateView(){
+//        loadViewIfNeeded()
+//        activityIndicatorView.stopAnimating()
+//        self.tableView.setContentOffset(.zero, animated: true)
+//        self.tableView.reloadData()
+//    }
         
     private func requestLocation() {
         // Configure Location Manager
@@ -151,10 +171,8 @@ extension RootViewController: CLLocationManagerDelegate {
         if let location = locations.first {
             // Update Current Location
             currentLocation = location
-
             // Reset Delegate
             manager.delegate = nil
-
             // Stop Location Manager
             manager.stopUpdatingLocation()
         }
@@ -166,61 +184,14 @@ extension RootViewController: CLLocationManagerDelegate {
     }
 }
 
-//extension RootViewController: LocationsViewControllerDelegate {
-//
-//    func controller(_ controller: LocationsViewController, didSelectLocation location: CLLocation) {
-//        currentLocation = location
-//    }
-//
-//}
-
-extension RootViewController{
-            
-        func fetchLocationsByCoordinate(_ coordinate:String){
-            activityIndicatorView.startAnimating()
-            dataManager.fetchWeatherData(by: SearchType.Coordinate(coordinate), responseType: [Location].self){ [weak self](result) in
-                self?.activityIndicatorView.stopAnimating()
-                switch result {
-                case .success(let locationData):
-                    print("success",locationData)
-                    self?.locationViewModel = LocationViewModel(locations: locationData)
-                case .failure:
-                    // Notify User
-                    self?.presentAlert(with: "Unable to Fetch Weather Data for Your Location", and: "Some error occured while fetching data")
-                }
-            }
-        }
-        
-        func fetchLocationsByQuery(_ searchQuery:String){
-            activityIndicatorView.startAnimating()
-            dataManager.fetchWeatherData(by: SearchType.Location(searchQuery), responseType: [Location].self){[weak self](result) in
-                self?.activityIndicatorView.stopAnimating()
-                switch result {
-                case .success(let locationData):
-                    self?.locationViewModel = LocationViewModel(locations: locationData)
-                case .failure:
-                    // Notify User
-                    self?.presentAlert(with: "Unable to Fetch Weather Data", and: "Some error occured while fetching data")
-                }
-            }
-        }
-        
-
-}
-
-
 extension RootViewController{
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return locationViewModel?.locationCount ?? 0
+        return locationViewModel.locationCount
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: LocationTableViewCell.reuseIdentifier, for: indexPath) as? LocationTableViewCell else {
-            fatalError("Unable to Dequeue Location Table View Cell")
-        }
-
-        guard let locationViewModel = locationViewModel else{
             fatalError("Unable to Dequeue Location Table View Cell")
         }
         
@@ -231,11 +202,16 @@ extension RootViewController{
 
         return cell
     }
+    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let location = locationViewModel.viewModel(for: indexPath.row)
+        let locationID = location.locationId
+        delegate?.locationSelected(locationID)
+        updateRecentSearches(location.locationTitle)
 
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if let destination = segue.destination as? WeatherDetailViewController,
-           let selectedRow = tableView.indexPathForSelectedRow?.row{
-            destination.locationID = locationViewModel?.viewModel(for: selectedRow).locationId
+        if let detailViewController = delegate as? WeatherDetailViewController,
+          let detailNavigationController = detailViewController.navigationController {
+            splitViewController?.showDetailViewController(detailNavigationController, sender: nil)
         }
     }
     
@@ -243,22 +219,44 @@ extension RootViewController{
         if sender.source is RecentsViewController {
             if let dataReceived = (sender.source as! RecentsViewController).dataPassed{
                 searchBar.text = dataReceived
-                fetchLocationsByQuery(dataReceived)
-                dataManager.addorUpdateRecentSearch(dataReceived, managedObjectContext)
+                locationViewModel.query = dataReceived
+                updateRecentSearches(dataReceived)
             }
         }
     }
-
     
-    
+    func updateRecentSearches(_ locationTitle:String?){
+        if let locationTitle = locationTitle, !locationTitle.isEmpty{
+            searchBar.resignFirstResponder()
+            dataManager.addorUpdateRecentSearch(locationTitle, managedObjectContext)
+        }
+    }
 }
 
 
 extension RootViewController:UISearchBarDelegate{
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        // Update Query
+        locationViewModel.query = searchText
+    }
+    
+    func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+        // Update Query
+        locationViewModel.query = searchBar.text ?? ""
+    }
+
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-        if let searchText = searchBar.text{
-            fetchLocationsByQuery(searchText)
-            dataManager.addorUpdateRecentSearch(searchText, managedObjectContext)
-        }
+        // Hide Keyboard
+        searchBar.resignFirstResponder()
+        // Update Query
+        updateRecentSearches(searchBar.text)
+        locationViewModel.query = searchBar.text ?? ""
+    }
+
+    func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        // Hide Keyboard
+        searchBar.resignFirstResponder()
+        // Reset Query
+        locationViewModel.query = ""
     }
 }
