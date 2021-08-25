@@ -68,9 +68,14 @@ class RootViewController: UITableViewController {
         // Subscribe to Locations Publisher
         locationViewModel.locationsPublisher
             .sink(receiveValue: { [weak self] _ in
-                self?.tableView.setContentOffset(.zero, animated: true)
-                self?.tableView.reloadData()
-            }).store(in: &subscriptions)
+                
+                DispatchQueue.main.async {
+                    self?.tableView.reloadData()
+                    if let rowCount = self?.tableView.numberOfRows(inSection: 0), rowCount > 0{
+                        self?.tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+                    }
+                }
+0            }).store(in: &subscriptions)
         
         // Subscribe to Querying
         locationViewModel.$querying
